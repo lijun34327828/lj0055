@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-ink-green: #1a2f23;
+  --color-cream: #faf6f0;
+  --color-amber-gold: #d4a853;
+  --color-soft-red: #c45c5c;
+  --ring-offset: 283;
+  --font-serif: 'Noto Serif SC', serif;
+  --font-sans: 'Noto Sans SC', sans-serif;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-sans);
+    background-color: var(--color-cream);
+    color: var(--color-ink-green);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+  }
+}
+
+@keyframes glow-border-pulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(212, 168, 83, 0.2), inset 0 0 5px rgba(212, 168, 83, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(212, 168, 83, 0.4), 0 0 30px rgba(212, 168, 83, 0.15), inset 0 0 10px rgba(212, 168, 83, 0.08);
+  }
+}
+
+@keyframes ring-fill {
+  from {
+    stroke-dashoffset: 283;
+  }
+  to {
+    stroke-dashoffset: var(--ring-offset);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.glow-active {
+  animation: glow-border-pulse 2s ease-in-out infinite;
+}
+
+.score-ring-animated {
+  animation: ring-fill 1.5s ease-out forwards;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #e8e0d4 25%, #f0e8dc 50%, #e8e0d4 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 168, 83, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 168, 83, 0.5);
+}
