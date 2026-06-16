@@ -1,12 +1,13 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { Palette } from 'lucide-react'
 import useStoryStore, { type Score } from '@/store/useStoryStore'
 
-async function optimizeText(text: string, style: 'children' | 'literary') {
+async function optimizeText(text: string, style: 'children' | 'literary', signal?: AbortSignal) {
   const res = await fetch('/api/optimize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, style }),
+    signal,
   })
   return res.json()
 }
@@ -81,39 +82,51 @@ export default function ScorePanel() {
     isOptimizing,
   } = useStoryStore()
 
-  const handleStyleChange = useCallback(async (newStyle: 'children' | 'literary') => {
-    setStyle(newStyle)
-    if (!text.trim()) return
-    setIsOptimizing(true)
-    try {
-      const result = await optimizeText(text, newStyle)
-      if (result.success && result.data) {
-        setOptimizeResult(result.data)
-      } else {
-        setOptimizeResult(null)
-      }
-    } catch {
-      setOptimizeResult(null)
-    } finally {
-      setIsOptimizing(false)
-    }
-  }, [text, setStyle, setOptimizeResult, setIsOptimizing])
+  const abortRef = useRef<AbortController | null>(null)
+  const lastOptimizeKeyRef = useRef<string>('')
 
   useEffect(() => {
-    if (text.trim() && analyzeResult) {
-      setIsOptimizing(true)
-      optimizeText(text, style)
-        .then((result) => {
-          if (result.success && result.data) {
-            setOptimizeResult(result.data)
-          } else {
-            setOptimizeResult(null)
-          }
-        })
-        .catch(() => setOptimizeResult(null))
-        .finally(() => setIsOptimizing(false))
+    if (!text.trim() || !analyzeResult) return
+
+    const key = `${text}::${style}`
+    if (key === lastOptimizeKeyRef.current) return
+    lastOptimizeKeyRef.current = key
+
+    if (abortRef.current) {
+      abortRef.current.abort()
     }
-  }, [analyzeResult])
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    setIsOptimizing(true)
+    optimizeText(text, style, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return
+        if (result.success && result.data) {
+          setOptimizeResult(result.data)
+        } else {
+          setOptimizeResult(null)
+        }
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (controller.signal.aborted) return
+        setOptimizeResult(null)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsOptimizing(false)
+        }
+      })
+
+    return () => {
+      controller.abort()
+    }
+  }, [analyzeResult, style, text, setOptimizeResult, setIsOptimizing])
+
+  const handleStyleChange = useCallback((newStyle: 'children' | 'literary') => {
+    setStyle(newStyle)
+  }, [setStyle])
 
   const score: Score = analyzeResult?.score ?? { overall: 0, characterDepth: 0, plotCoherence: 0, timelineCompleteness: 0, logicalConsistency: 0 }
 

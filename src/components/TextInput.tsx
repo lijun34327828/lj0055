@@ -2,21 +2,24 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Feather } from 'lucide-react'
 import useStoryStore from '@/store/useStoryStore'
 
-async function analyzeText(text: string) {
+async function analyzeText(text: string, signal?: AbortSignal) {
   const res = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
+    signal,
   })
   return res.json()
 }
 
 export default function TextInput() {
-  const { text, setText, setAnalyzeResult, setIsAnalyzing } = useStoryStore()
+  const { setText, setAnalyzeResult, setIsAnalyzing, setOptimizeResult } = useStoryStore()
   const [isTyping, setIsTyping] = useState(false)
-  const [localText, setLocalText] = useState(text)
+  const [localText, setLocalText] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const typingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+  const lastAnalyzedRef = useRef<string>('')
 
   const handleChange = useCallback((value: string) => {
     setLocalText(value)
@@ -27,31 +30,52 @@ export default function TextInput() {
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
+      if (!value.trim()) {
+        setAnalyzeResult(null)
+        lastAnalyzedRef.current = ''
+        return
+      }
+
+      if (value === lastAnalyzedRef.current) return
+
+      if (abortRef.current) {
+        abortRef.current.abort()
+      }
+      const controller = new AbortController()
+      abortRef.current = controller
+
       setText(value)
-      if (value.trim()) {
-        setIsAnalyzing(true)
-        try {
-          const result = await analyzeText(value)
-          if (result.success && result.data) {
-            setAnalyzeResult(result.data)
-          } else {
-            setAnalyzeResult(null)
-          }
-        } catch {
+      setAnalyzeResult(null)
+      setOptimizeResult(null)
+      setIsAnalyzing(true)
+      try {
+        const result = await analyzeText(value, controller.signal)
+        if (controller.signal.aborted) return
+        if (result.success && result.data) {
+          setAnalyzeResult(result.data)
+          lastAnalyzedRef.current = value
+        } else {
           setAnalyzeResult(null)
-        } finally {
+          lastAnalyzedRef.current = ''
+        }
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (controller.signal.aborted) return
+        setAnalyzeResult(null)
+        lastAnalyzedRef.current = ''
+      } finally {
+        if (!controller.signal.aborted) {
           setIsAnalyzing(false)
         }
-      } else {
-        setAnalyzeResult(null)
       }
-    }, 500)
-  }, [setText, setAnalyzeResult, setIsAnalyzing])
+    }, 600)
+  }, [setText, setAnalyzeResult, setIsAnalyzing, setOptimizeResult])
 
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
       if (typingRef.current) clearTimeout(typingRef.current)
+      if (abortRef.current) abortRef.current.abort()
     }
   }, [])
 
